@@ -1,24 +1,49 @@
 <?php
 
+require_once "PhactoryGurl/Dataset.php";
+
 
 trait PhactoryGurl {
+  protected $factory;
+
+  function setUp() {
+    parent::setUp();
+
+    if(true) { //Check if this is a database test case
+    } else {
+      //otherwise instantiate our own database test case functionality.
+    }
+  }
+
   function getDataSet() {
-    return array();
+    return $this->factory()->emptyDataset();
   } 
 
   function build($class, $args = array()) {
-    return static::factory()->build($class, $args);
+    return $this->factory()->build($class, $args);
   }
 
-  static function setFactory($factory) {
-    PhactoryGurl_Factory::$factory = $factory;
+  function buildOrFind($class, $args= array()) {
+    return $this->factory()->buildOrFind($class, $args);
   }
 
-  static function factory() {
-    if(PhactoryGurl_Factory::$factory) {
-      return PhactoryGurl_Factory::$factory;
+  function create($class, $args = array()) {
+    return $this->factory()->create($class, $args);
+  }
+
+  function mock($class, $args = array()) {
+    throw new Exception("Not implemented.");
+  }
+
+  function setFactory($factory) {
+    $this->factory = $factory;
+  }
+
+  function factory() {
+    if($this->factory) {
+      return $this->factory;
     } else {
-      return PhactoryGurl_Factory::$factory = new PhactoryGurl_Factory;
+      return $this->factory = new PhactoryGurl_Factory;
     }
   }
 
@@ -27,7 +52,21 @@ trait PhactoryGurl {
 
 class PhactoryGurl_Definitions {
   static protected $builders = [];
-  static function register($class_name, $builder) {
+  static protected $attributes = [];
+
+  static function clear() {
+    self::$builders = array();
+    self::$attributes = array();
+  }
+
+  static function register($class_name, $attributes, $builder = null) {
+    if(is_null($builder)) {
+      $builder = $attributes;
+      $attributes = array();
+    }
+    
+
+    self::$attributes[$class_name] = $attributes;
     self::$builders[$class_name] = $builder;
   }
 
@@ -35,9 +74,20 @@ class PhactoryGurl_Definitions {
     return isset(self::$builders[$class_name]);
   }
 
-  static function definition($class_name) {
-    if(!self::registered($class_name)) throw new Exception("$class_name has not been registered to PhactoryGurl.");
-    return self::$builders[$class_name];
+  static function definition($gurl) {
+    if(!self::registered($gurl)) throw new Exception("$gurl has not been registered to PhactoryGurl.");
+
+
+    return array("builder" => self::$builders[$gurl]) + array_merge(["class" => $gurl], self::$attributes[$gurl] ?: array());
+  }
+
+  static function builder($gurl) {
+    if(!self::registered($gurl)) throw new Exception("$gurl has not been registered to PhactoryGurl.");
+    return self::$builders[$gurl];
+  }
+
+  static function tables() {
+    return array_map(function($i) { return $i["table"]; }, self::$attributes);
   }
 }
 
@@ -78,27 +128,46 @@ class PhactoryGurl_Factory {
     }
   }
 
+
+  function emptyDataset() {
+    return new PhactoryGurl_Dataset(PhactoryGurl_Definitions::tables());
+  }
+
+
+  function getDefinition($gurl) {
+    return $definition = PhactoryGurl_Definitions::definition($gurl);
+  }
+
+
+  function create($gurl, $args = array()) {
+    $definition = $this->getDefinition($gurl);
+
+    $class = $definition["class"];
+
+    return $this->adapter()->create($class, $this->getArgs($gurl, $args));
+  }
+
+
   function build($class, $args = array()) {
     $ob = $this->create($class, $args);
     return $this->save($ob);
   }
 
+
   function save($object) {
     return $this->adapter()->save($object);
   }
 
-  protected function getArgs($class, $args) {
-    $argFunc = PhactoryGurl_Definitions::definition($class);
-    return self::merge($argFunc(), $args);
-  }
 
-  function create($class, $args = array()) {
-    return $this->adapter()->create($class, $this->getArgs($class, $args));
+  protected function getArgs($class, $args) {
+    $argFunc = PhactoryGurl_Definitions::builder($class);
+
+    return self::merge($argFunc($this), $args);
   }
 
 
   static function merge($first_args, $second_args) {
-    return array_merge($first_args, $second_args);
+    return array_merge($first_args ?: array(), $second_args ?: array());
   }
 
   static function __callStatic($func, $args) {

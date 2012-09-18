@@ -1,6 +1,13 @@
 <?php
 
 class PhactoryGurl_FactoryTest extends PHPUnit_Framework_TestCase {
+
+  function setUp() {
+    parent::setUp();
+    PhactoryGurl_Definitions::clear();
+    PhactoryGurl_Factory::setAdapter(null);
+  }
+
   function registerBasicBuilder() {
     PhactoryGurl_Definitions::register("TestOb", function() {
       return ["one", "two", "three"];
@@ -17,8 +24,9 @@ class PhactoryGurl_FactoryTest extends PHPUnit_Framework_TestCase {
 
     PhactoryGurl_Factory::setAdapter($adapter);
 
-    $factory = $this->getMock("PhactoryGurl_Factory", array("getArgs"));
+    $factory = $this->getMock("PhactoryGurl_Factory", array("getArgs", "getDefinition"));
     $factory->expects($this->once())->method("getArgs")->will($this->returnValue($args));
+    $factory->expects($this->once())->method("getDefinition")->will($this->returnValue(array("class" => "testClass")));
 
     $factory->create("testClass", $args);
 
@@ -26,8 +34,6 @@ class PhactoryGurl_FactoryTest extends PHPUnit_Framework_TestCase {
 
   function testBasicEndToEnd() {
     $this->registerBasicBuilder();
-
-
 
     $factory = new PhactoryGurl_Factory;
     $ob = $factory->create("TestOb");
@@ -59,8 +65,6 @@ class PhactoryGurl_FactoryTest extends PHPUnit_Framework_TestCase {
 
     $factory = new PhactoryGurl_Factory;
     $factory->build("test");
-
-
   }
 
 }
